@@ -23,7 +23,6 @@ import org.apache.commons.cli.Options
 import org.apache.commons.cli.{Option => CmdOption}
 import org.apache.commons.cli.OptionBuilder/*}}}*/
 
-
 object Main {
   def main(args: Array[String]) : Unit = {
     val result = ToolRunner.run(new Configuration(), new SSimilarity(), args);
@@ -34,6 +33,7 @@ object Main {
 object SSimilarity extends HadoopInterop {
 
   val LOG = Logger.getRootLogger()
+  val PRECISION = 8
 
   object FirstPhase {
 
@@ -42,8 +42,10 @@ object SSimilarity extends HadoopInterop {
     extends SMapper[LongWritable, Text, Text, Text] {
       override def map(key: LongWritable, line: Text, context: Context) {
         val cols = line.toString.split(",")
-        var (user_id, item_id, pref)= (cols(0), cols(1), cols(2))
-        context.write(item_id, List(user_id, pref).mkString(","))
+        var (userId, itemId, pref)= (cols(0), cols(1), cols(2))
+
+        if(userId.length > 0 && itemId.length > 0)
+          context.write(itemId, List(userId, pref).mkString(","))
       }
     }
 
@@ -72,7 +74,6 @@ object SSimilarity extends HadoopInterop {
       job.setInputFormatClass(classOf[TextInputFormat])
       FileInputFormat.setInputPaths(job, conf.get("ssimilarity.input"))
       job.setOutputFormatClass(classOf[SequenceFileOutputFormat[Text, Text]])
-      // job.setOutputFormatClass(classOf[TextOutputFormat[Text, Text]])
 
       FileOutputFormat.setOutputPath(job, conf.get("ssimilarity.itemvectorspath"))
 
@@ -104,7 +105,7 @@ object SSimilarity extends HadoopInterop {
           length += prefVal * prefVal 
         })
   
-        length = java.lang.Math.sqrt(length)
+        length = truncate(java.lang.Math.sqrt(length), PRECISION)
 
         userPrefs.split("\\|").foreach(pref => { // todo, combine with above
           var (userId, prefVal) = pref.parsedItemPref 
@@ -132,11 +133,10 @@ object SSimilarity extends HadoopInterop {
       job.setMapperClass(classOf[PreferredItemsPerUserMapper])
       job.setReducerClass(classOf[PreferredItemsPerUserReducer])
 
-      // job.setInputFormatClass(classOf[TextInputFormat])
       job.setInputFormatClass(classOf[SequenceFileInputFormat[Text, Text]])
       FileInputFormat.setInputPaths(job, conf.get("ssimilarity.itemvectorspath"))
-      // job.setOutputFormatClass(classOf[TextOutputFormat[Text, Text]])
       job.setOutputFormatClass(classOf[SequenceFileOutputFormat[Text, Text]])
+      // job.setOutputFormatClass(classOf[TextOutputFormat[Text, Text]])
       FileOutputFormat.setOutputPath(job, conf.get("ssimilarity.uservectorspath"))
 
       job.setMapOutputKeyClass(classOf[Text])
@@ -174,9 +174,9 @@ object SSimilarity extends HadoopInterop {
             val itemAId = idsSorted.first
             val itemBId = idsSorted.last
 
-            val pair = List(itemAId, itemBId, itemNLength * itemMLength).mkString(",")
+            val pair = List(itemAId, itemBId, truncate(itemNLength * itemMLength, PRECISION)).mkString(",")
 
-            context.write(pair, itemNPrefVal * itemMPrefVal)
+            context.write(pair, truncate(itemNPrefVal * itemMPrefVal, PRECISION))
             m += 1
           }
 
@@ -192,13 +192,26 @@ object SSimilarity extends HadoopInterop {
             return (cols(0), cols(1), java.lang.Double.parseDouble(cols(2)))
         }
       }
+
       override def reduce(pair: Text, values: Iterable[DoubleWritable], context:Context) {
+        // here you can count the number of times it was co-rated by the number of values
+        val minimumCoratedCount = java.lang.Integer.parseInt(context.getConfiguration.get("ssimilarity.minimum-corated-count"))
+        var actualCoratedCount = 0
+
         var numerator = 0.0D
-        for (value <- values) { numerator += value }
-        var (idA, idB, length) = pair.parsedItemPairLength
-        var denominator = length 
-        var cosine = numerator / denominator 
-        context.write(List(idA,idB).mkString(","), cosine)
+        for (value <- values) { 
+          numerator += value 
+          actualCoratedCount += 1
+        }
+        println("min: %d act: %d", minimumCoratedCount, actualCoratedCount)
+
+        if(actualCoratedCount >= minimumCoratedCount) { 
+          var (idA, idB, length) = pair.parsedItemPairLength
+          var denominator = length 
+          var cosine = numerator / denominator 
+          context.write(List(idA,idB).mkString(","), cosine)
+        }
+
       }
     }
     
@@ -227,6 +240,12 @@ object SSimilarity extends HadoopInterop {
       return job
     }
   }
+
+  // todo, move to a trait
+  def truncate(d : Double, places : int) : Double = {
+    return new java.math.BigDecimal(d, new java.math.MathContext(places)).doubleValue
+  }
+  
 
 
 }
@@ -262,6 +281,9 @@ class SSimilarity extends Configured with Tool with HadoopInterop {
       System.exit(1)
     }
 
+    conf.set("ssimilarity.minimum-corated-count",
+                   cl.getOptionValue("minimumcoratedcount", "1"))
+
     conf.set("ssimilarity.input",
                    cl.getOptionValue("input", "inputfiles"))
     conf.set("ssimilarity.tmpdir",
@@ -287,9 +309,15 @@ class SSimilarity extends Configured with Tool with HadoopInterop {
                                true,
                                "Directory to write all output to")
     input.setType("")
+    var mincc = new CmdOption("minimumcoratedcount",
+                              true,
+                              "Minimum number times an item needs to be corated to get a similarity score")
+    mincc.setType("")
+
     val ops = new Options()
     ops.addOption(input)
     ops.addOption(output)
+    ops.addOption(mincc)
     ops
   }
 }
