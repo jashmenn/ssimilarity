@@ -87,6 +87,12 @@ object SSimilarity extends HadoopInterop {
   }
 
   object SecondPhase {
+    implicit def string2parsedTuple(string: String) = new {
+      def parsedItemPref() : Tuple2[String, Double] = {
+          var cols = string.split(",") 
+          return (cols(0), java.lang.Double.parseDouble(cols(1)))
+      }
+    }
 
     // for each item-vector, we compute its length here and map out all entries with the user as key,
     // so we can create the user-vectors in the reducer
@@ -95,16 +101,14 @@ object SSimilarity extends HadoopInterop {
         var length = 0.0D
 
         userPrefs.split("\\|").foreach(pref => {
-          var cols = pref.split(",") 
-          var (userId, prefVal) = (cols(0), java.lang.Double.parseDouble(cols(1)))
+          var (userId, prefVal) = pref.parsedItemPref
           length += prefVal * prefVal 
         })
   
         length = java.lang.Math.sqrt(length)
 
         userPrefs.split("\\|").foreach(pref => { // todo, combine with above
-          var cols = pref.split(",") 
-          var (userId, prefVal) = (cols(0), java.lang.Double.parseDouble(cols(1)))
+          var (userId, prefVal) = pref.parsedItemPref 
           context.write(userId, List(itemId, length, prefVal).mkString(","))
         })
       }
@@ -146,14 +150,37 @@ object SSimilarity extends HadoopInterop {
   }
 
   object ThirdPhase {
+    implicit def string2parsedTuple(string: String) = new {
+      def parsedItemPref() : Tuple3[String, Double, Double] = {
+          var cols = string.split(",") 
+          return (cols(0), java.lang.Double.parseDouble(cols(1)), java.lang.Double.parseDouble(cols(2)))
+      }
+    }
 
+    // map out each pair of items that appears in the same user-vector together with the multiplied vector lengths
+    // of the associated item vectors
     class CopreferredItemsMapper extends SMapper[Text, Text, Text, Text] {
-      override def map(userId: Text, userPrefs: Text, context: Context) {
-        // userPrefs.split("\\|").foreach(pref => { // todo, combine with above
-        //   var cols = pref.split(",") 
-        //   var (userId, prefVal) = (cols(0), java.lang.Double.parseDouble(cols(1)))
-        //   context.write(userId, List(itemId, length, prefVal).mkString(","))
-        // })
+      override def map(userId: Text, itemPrefLines: Text, context: Context) {
+        var itemPrefs = itemPrefLines.split("\\|")
+        
+        itemPrefs.zipWithIndex.foreach { case (pref, n) => { // todo, combine with above
+          var (itemNId, itemNLength, itemNPrefVal) = pref.parsedItemPref
+
+          var m = n + 1
+          while(m < itemPrefs.length) { 
+            var (itemMId, itemMLength, itemMPrefVal) = itemPrefs(m).parsedItemPref
+
+            val idsSorted = List(itemNId, itemMId).sort((e1, e2) => (e1 compareTo e2) < 0)
+            val itemAId = idsSorted.first
+            val itemBId = idsSorted.last
+
+            val pair = List(itemAId, itemBId, itemNLength * itemMLength).mkString(",")
+
+            context.write(pair, (itemNPrefVal * itemMPrefVal).toString)
+            m += 1
+          }
+
+        }}
       }
     }
 
@@ -161,7 +188,7 @@ object SSimilarity extends HadoopInterop {
       override def reduce(userId: Text, values: Iterable[Text], context:Context) {
         // var prefs = values.foldLeft(new ListBuffer[String]()) { (acc, value) => acc += value; acc }
         // context.write(userId, prefs.mkString("|"))
-        (value <- values) {
+        for (value <- values) {
           context.write(userId, value)
         }
       }
@@ -176,7 +203,7 @@ object SSimilarity extends HadoopInterop {
     def joinJob(conf: Configuration) : Job = {
       val job = new Job(conf, "create item similarity")
       job.setJarByClass(classOf[SSimilarity])
-      job.setMapperClass(classOf[CopreferredItemsMaper])
+      job.setMapperClass(classOf[CopreferredItemsMapper ])
       job.setReducerClass(classOf[CosineSimilarityReducer])
 
       // job.setInputFormatClass(classOf[TextInputFormat])
@@ -212,10 +239,10 @@ class SSimilarity extends Configured with Tool with HadoopInterop {
     if (!SSimilarity.SecondPhase.run(conf)) return 1
     SSimilarity.LOG.info("Finished SecondPhase.")
 
-    // if (!SSimilarity.ThirdPhase.run(conf)) return 1 
-    // SSimilarity.LOG.info("Finished ThirdPhase.")
+    if (!SSimilarity.ThirdPhase.run(conf)) return 1 
+    SSimilarity.LOG.info("Finished ThirdPhase.")
 
-    // SSimilarity.LOG.info("Output directory: ")
+    SSimilarity.LOG.info("Output directory: " + conf.get("ssimilarity.outputdir"))
     return 0
   }
 
