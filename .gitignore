@@ -3,3 +3,5 @@ target
 .autosession.vim
 .DS_Store
 output
+tmp
+output-stripes

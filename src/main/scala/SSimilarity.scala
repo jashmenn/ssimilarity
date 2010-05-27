@@ -240,6 +240,61 @@ object SSimilarity extends HadoopInterop {
     }
   }
 
+  object FourthPhase {
+
+    // emit both sides with similarity scores 
+    class SimilarityExpanderMapper extends SMapper[LongWritable, Text, Text, Text] {
+      override def map(key: LongWritable, line: Text, context: Context) {
+        val cols = line.toString.split("\t")
+        var (itemIdA, itemIdB, cos)= (cols(0), cols(1), cols(2))
+
+        context.write(itemIdA, List(itemIdB, cos).mkString(","))
+        context.write(itemIdB, List(itemIdA, cos).mkString(","))
+      }
+    }
+
+    class SimilarItemsStriperReducer extends SReducer[Text, Text, Text, Text] {
+      implicit def string2parsedTuple(text: String) = new {
+        def parsedPair() : Tuple2[String, Double] = {
+            var cols = text.split(",") 
+            return (cols(0), java.lang.Double.parseDouble(cols(1)))
+        }
+      }
+
+      override def reduce(itemIdA: Text, values: Iterable[Text], context:Context) {
+        var others = values.foldLeft(new ListBuffer[String]()) { (acc, value) => acc += value; acc }
+        var othersL = others.toList.sort((e1, e2) => (e1.parsedPair._2 > e2.parsedPair._2)) // note descending
+        context.write(itemIdA, othersL.mkString("|"))
+      }
+    }
+    
+    def run(conf: Configuration) : Boolean = {
+      LOG.info("Running FourthPhase.")
+      val job = joinJob(conf)
+      job.waitForCompletion(true)
+    }
+
+    def joinJob(conf: Configuration) : Job = {
+      val job = new Job(conf, "create similar item stripes")
+      job.setJarByClass(classOf[SSimilarity])
+      job.setMapperClass(classOf[SimilarityExpanderMapper])
+      job.setReducerClass(classOf[SimilarItemsStriperReducer])
+
+      job.setInputFormatClass(classOf[TextInputFormat])
+      FileInputFormat.setInputPaths(job, conf.get("ssimilarity.outputdir"))
+      job.setOutputFormatClass(classOf[TextOutputFormat[Text, Text]])
+      FileOutputFormat.setOutputPath(job, conf.get("ssimilarity.outputdir-stripes"))
+
+      job.setMapOutputKeyClass(classOf[Text])
+      job.setMapOutputValueClass(classOf[Text])
+      job.setOutputKeyClass(classOf[Text])
+      job.setOutputValueClass(classOf[Text])
+
+      return job
+    }
+  }
+
+
   // todo, move to a trait
   def truncate(d : Double, places : int) : Double = {
     return new java.math.BigDecimal(d, new java.math.MathContext(places)).doubleValue
@@ -265,7 +320,11 @@ class SSimilarity extends Configured with Tool with HadoopInterop {
     if (!SSimilarity.ThirdPhase.run(conf)) return 1 
     SSimilarity.LOG.info("Finished ThirdPhase.")
 
+    if (!SSimilarity.FourthPhase.run(conf)) return 1 
+    SSimilarity.LOG.info("Finished FourthPhase.")
+
     SSimilarity.LOG.info("Output directory: " + conf.get("ssimilarity.outputdir"))
+    SSimilarity.LOG.info("             and: " + conf.get("ssimilarity.outputdir-stripes"))
     return 0
   }
 
@@ -287,6 +346,8 @@ class SSimilarity extends Configured with Tool with HadoopInterop {
                    cl.getOptionValue("tmpdir", "tmp"))
     conf.set("ssimilarity.outputdir",
                    cl.getOptionValue("outputdir", "output"))
+    conf.set("ssimilarity.outputdir-stripes",
+                   cl.getOptionValue("outputdir-stripes", conf.get("ssimilarity.outputdir") + "-stripes"))
 
     // setup our tmp paths
     conf.set("ssimilarity.itemvectorspath",

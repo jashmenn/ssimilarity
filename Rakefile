@@ -3,6 +3,7 @@ task :default do
 end
 
 task :clean do
-  sh "rm -rf output"
-  sh "rm -rf tmp/*"
+  sh "rm -rf output" rescue nil
+  sh "rm -rf output-stripes" rescue nil
+  sh "rm -rf tmp/*" rescue nil
 end

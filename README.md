@@ -50,17 +50,27 @@ Phase 1: Create the item-vectors
 Phase 2: Compute the length of the item vectors, store it with the item, create the user-vectors 
 
     # (userId, (itemId, ivLength, prefVal) ...)
-    Jay     iPad,4.0,4.0|iPhone,5.830951894845301,3.0
-    Nate    VW,5.0,5.0|iPhone,5.830951894845301,5.0
+    Jay     iPad,4.0,4.0|iPhone,5.830951,3.0
+    Nate    VW,5.0,5.0|iPhone,5.830951,5.0
 
 Phase 3: Compute the pairwise cosine similarity for all item pairs that have been co-rated by at least n users 
 
-                                            [1]         [2]
-    VW      iPhone  0.8574929396603828 # => 5.0 * 5.0 / (5.0 * 5.83)
-    iPad    iPhone  0.5144957461491708 # => 4.0 * 3.0 / (4.0 * 5.83) 
+                                  [1]         [2]
+    VW      iPhone  0.857492 # => 5.0 * 5.0 / (5.0 * 5.83)
+    iPad    iPhone  0.514495 # => 4.0 * 3.0 / (4.0 * 5.83) 
 
     where [1] is the sum of the product of the co-rated pref values (dot product) and 
           [2] is the product of the vector lengths 
+
+Phase 4 (optional): Generate stripes of each item with its list of similar items 
+
+This output allows you to easily give a recommendation for based on the key-item. Value-items are sorted in descending order by similarity..  
+
+    VW      iPhone,0.8574929396603828
+    iPad    iPhone,0.5144957461491708
+    iPhone  VW,0.8574929396603828|iPad,0.5144957461491708
+
+
 
 ### Credit
 
