@@ -2,7 +2,7 @@
 
 ### What this is 
 
-Runs a distributed computation of the cosine distance of the item-vectors of a
+Runs a distributed computation of the cosine similarity of the item-vectors in a
 user-item matrix.  This value can be used as the basis for an item-based
 recommendation system.
 
