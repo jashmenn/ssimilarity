@@ -209,7 +209,7 @@ object SSimilarity extends HadoopInterop {
           var (idA, idB, length) = pair.parsedItemPairLength
           var denominator = length 
           var cosine = numerator / denominator 
-          context.write(List(idA,idB).mkString(","), cosine)
+          context.write(List(idA,idB).mkString("\t"), cosine)
         }
 
       }

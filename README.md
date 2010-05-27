@@ -38,7 +38,14 @@ Phase 2: Compute the length of the item vectors, store it with the item, create 
     Jay     iPad,4.0,4.0|iPhone,5.830951894845301,3.0
     Nate    VW,5.0,5.0|iPhone,5.830951894845301,5.0
 
-Phase 3: Compute the pairwise cosine for all item pairs that have been co-rated by at least one user
+Phase 3: Compute the pairwise cosine similarity for all item pairs that have been co-rated by at least n users 
+
+                                            [1]         [2]
+    VW      iPhone  0.8574929396603828 # => 5.0 * 5.0 / (5.0 * 5.83)
+    iPad    iPhone  0.5144957461491708 # => 4.0 * 3.0 / (4.0 * 5.83) 
+
+    where [1] is the sum of the product of the co-rated pref values (dot product) and 
+          [2] is the product of the vector lengths 
 
     
 

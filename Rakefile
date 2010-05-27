@@ -1,5 +1,5 @@
 task :default do
-  sh "hadoop jar target/ssimilar-0.0.1.jar ssimilarity.Main -input examples/simple-two/two.csv -minimumcoratedcount 2"
+  sh "hadoop jar target/ssimilar-0.0.1.jar ssimilarity.Main -input examples/simple-two/two.csv -minimumcoratedcount 1"
 end
 
 task :clean do
