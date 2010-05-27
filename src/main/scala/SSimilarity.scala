@@ -1,5 +1,5 @@
 package ssimilarity
-import scala.collection.mutable /*{{{*/
+import scala.collection.mutable._ /*{{{*/
 
 import org.apache.hadoop.util.ToolRunner
 import org.apache.hadoop.util.Tool
@@ -23,6 +23,7 @@ import org.apache.commons.cli.Options
 import org.apache.commons.cli.{Option => CmdOption}
 import org.apache.commons.cli.OptionBuilder/*}}}*/
 
+
 object Main {
   def main(args: Array[String]) : Unit = {
     val result = ToolRunner.run(new Configuration(), new SSimilarity(), args);
@@ -30,24 +31,30 @@ object Main {
   }
 }
 
+
 object SSimilarity extends HadoopInterop {
 
   val LOG = Logger.getRootLogger()
 
   object FirstPhase {
+
+    // outputs item_id mapped to user preferences
     class ToUserPrefsMapper
     extends SMapper[LongWritable, Text, Text, Text] {
       override def map(key: LongWritable, line: Text, context: Context) {
-        val arr = line.toString.split(",")
-        context.write(arr.mkString(","), "1")
+        val cols = line.toString.split(",")
+        var (user_id, item_id, pref)= (cols(0), cols(1), cols(2))
+        context.write(item_id, List(user_id, pref).mkString(","))
       }
     }
 
+    // group each item_id with its list of user preferences   
     class ToItemVectorReducer extends SReducer[Text, Text, Text, Text] {
       override def reduce(key: Text, values: Iterable[Text], context:Context) {
-        for (value <- values) {
-          context.write(key, value)
+        var prefs = values.foldLeft(new ListBuffer[String]()) { 
+          (acc, value) => acc += value; acc
         }
+        context.write(key, prefs.mkString("|"))
       }
     }
     
@@ -65,8 +72,8 @@ object SSimilarity extends HadoopInterop {
 
       job.setInputFormatClass(classOf[TextInputFormat])
       FileInputFormat.setInputPaths(job, conf.get("ssimilarity.input"))
-      // job.setOutputFormatClass(classOf[SequenceFileOutputFormat[Text, Text]])
-      job.setOutputFormatClass(classOf[TextOutputFormat[Text, Text]])
+      job.setOutputFormatClass(classOf[SequenceFileOutputFormat[Text, Text]])
+      // job.setOutputFormatClass(classOf[TextOutputFormat[Text, Text]])
 
       FileOutputFormat.setOutputPath(job, conf.get("ssimilarity.itemvectorspath"))
 
@@ -78,6 +85,116 @@ object SSimilarity extends HadoopInterop {
       return job
     }
   }
+
+  object SecondPhase {
+
+    // for each item-vector, we compute its length here and map out all entries with the user as key,
+    // so we can create the user-vectors in the reducer
+    class PreferredItemsPerUserMapper extends SMapper[Text, Text, Text, Text] {
+      override def map(itemId: Text, userPrefs: Text, context: Context) {
+        var length = 0.0D
+
+        userPrefs.split("\\|").foreach(pref => {
+          var cols = pref.split(",") 
+          var (userId, prefVal) = (cols(0), java.lang.Double.parseDouble(cols(1)))
+          length += prefVal * prefVal 
+        })
+  
+        length = java.lang.Math.sqrt(length)
+
+        userPrefs.split("\\|").foreach(pref => { // todo, combine with above
+          var cols = pref.split(",") 
+          var (userId, prefVal) = (cols(0), java.lang.Double.parseDouble(cols(1)))
+          context.write(userId, List(itemId, length, prefVal).mkString(","))
+        })
+      }
+    }
+
+    class PreferredItemsPerUserReducer extends SReducer[Text, Text, Text, Text] {
+      override def reduce(userId: Text, values: Iterable[Text], context:Context) {
+        var prefs = values.foldLeft(new ListBuffer[String]()) { (acc, value) => acc += value; acc }
+        context.write(userId, prefs.mkString("|"))
+      }
+    }
+    
+    def run(conf: Configuration) : Boolean = {
+      LOG.info("Running SecondPhase.")
+      val job = joinJob(conf)
+      job.waitForCompletion(true)
+    }
+
+    def joinJob(conf: Configuration) : Job = {
+      val job = new Job(conf, "create user vectors")
+      job.setJarByClass(classOf[SSimilarity])
+      job.setMapperClass(classOf[PreferredItemsPerUserMapper])
+      job.setReducerClass(classOf[PreferredItemsPerUserReducer])
+
+      // job.setInputFormatClass(classOf[TextInputFormat])
+      job.setInputFormatClass(classOf[SequenceFileInputFormat[Text, Text]])
+      FileInputFormat.setInputPaths(job, conf.get("ssimilarity.itemvectorspath"))
+      // job.setOutputFormatClass(classOf[TextOutputFormat[Text, Text]])
+      job.setOutputFormatClass(classOf[SequenceFileOutputFormat[Text, Text]])
+      FileOutputFormat.setOutputPath(job, conf.get("ssimilarity.uservectorspath"))
+
+      job.setMapOutputKeyClass(classOf[Text])
+      job.setMapOutputValueClass(classOf[Text])
+      job.setOutputKeyClass(classOf[Text])
+      job.setOutputValueClass(classOf[Text])
+
+      return job
+    }
+  }
+
+  object ThirdPhase {
+
+    class CopreferredItemsMapper extends SMapper[Text, Text, Text, Text] {
+      override def map(userId: Text, userPrefs: Text, context: Context) {
+        // userPrefs.split("\\|").foreach(pref => { // todo, combine with above
+        //   var cols = pref.split(",") 
+        //   var (userId, prefVal) = (cols(0), java.lang.Double.parseDouble(cols(1)))
+        //   context.write(userId, List(itemId, length, prefVal).mkString(","))
+        // })
+      }
+    }
+
+    class CosineSimilarityReducer extends SReducer[Text, Text, Text, Text] {
+      override def reduce(userId: Text, values: Iterable[Text], context:Context) {
+        // var prefs = values.foldLeft(new ListBuffer[String]()) { (acc, value) => acc += value; acc }
+        // context.write(userId, prefs.mkString("|"))
+        (value <- values) {
+          context.write(userId, value)
+        }
+      }
+    }
+    
+    def run(conf: Configuration) : Boolean = {
+      LOG.info("Running ThirdPhase.")
+      val job = joinJob(conf)
+      job.waitForCompletion(true)
+    }
+
+    def joinJob(conf: Configuration) : Job = {
+      val job = new Job(conf, "create item similarity")
+      job.setJarByClass(classOf[SSimilarity])
+      job.setMapperClass(classOf[CopreferredItemsMaper])
+      job.setReducerClass(classOf[CosineSimilarityReducer])
+
+      // job.setInputFormatClass(classOf[TextInputFormat])
+      job.setInputFormatClass(classOf[SequenceFileInputFormat[Text, Text]])
+      FileInputFormat.setInputPaths(job, conf.get("ssimilarity.uservectorspath"))
+      job.setOutputFormatClass(classOf[TextOutputFormat[Text, Text]])
+      FileOutputFormat.setOutputPath(job, conf.get("ssimilarity.outputdir"))
+
+      job.setMapOutputKeyClass(classOf[Text])
+      job.setMapOutputValueClass(classOf[Text])
+      job.setOutputKeyClass(classOf[Text])
+      job.setOutputValueClass(classOf[Text])
+
+      return job
+    }
+  }
+
+
 }
 
 
@@ -92,8 +209,8 @@ class SSimilarity extends Configured with Tool with HadoopInterop {
     if (!SSimilarity.FirstPhase.run(conf)) return 1
     SSimilarity.LOG.info("Finished FirstPhase.")
 
-    // if (!SSimilarity.SecondPhase.run(conf)) return 1
-    // SSimilarity.LOG.info("Finished SecondPhase.")
+    if (!SSimilarity.SecondPhase.run(conf)) return 1
+    SSimilarity.LOG.info("Finished SecondPhase.")
 
     // if (!SSimilarity.ThirdPhase.run(conf)) return 1 
     // SSimilarity.LOG.info("Finished ThirdPhase.")
