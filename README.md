@@ -66,7 +66,7 @@ Phase 3: Compute the pairwise cosine similarity for all item pairs that have bee
 
 * Outline originally based on ItemSimilarityJob in the Apache Mahout project. 
 * Algorithm used is a slight modification from the algorithm described in 
-  http://www.umiacs.umd.edu/~jimmylin/publications/Elsayed_etal_ACL2008_short.pdf
-* HadoopInterop.scala forked from jmhodges "componentize" 
-* and a bit from: http://blog.jonhnnyweslley.net/2008/05/shadoop.html
+  [Pairwise Document Similarity in Large Collections with MapReduce](http://www.umiacs.umd.edu/~jimmylin/publications/Elsayed_etal_ACL2008_short.pdf)
+* HadoopInterop.scala forked from jmhodges "[componentize](http://github.com/jmhodges/componentize)" 
+* and a bit from: [http://blog.jonhnnyweslley.net/2008/05/shadoop.html](http://blog.jonhnnyweslley.net/2008/05/shadoop.html)
 
