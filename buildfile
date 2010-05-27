@@ -24,7 +24,6 @@ define "ssimilar" do
 
   all_jars.collect { |jar| compile.with jar }
   compile.dependencies << FileList['lib/*.jar']
-  compile.dependencies << gephi_jars 
 
   package(:jar)
 
@@ -34,7 +33,7 @@ define "ssimilar" do
   compile.using :other => ["-Xplugin:#{path}",
                    "-P:sxr:base-directory:#{_('src','main','scala')}"]
 
-  included_artifacts = all_jars.collect{|jar| artifacts(jar).to_s} + gephi_jars
+  included_artifacts = all_jars.collect{|jar| artifacts(jar).to_s}
   package(:jar).include(included_artifacts, :path => "lib")
 end
 

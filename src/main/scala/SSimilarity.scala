@@ -8,8 +8,9 @@ import org.apache.hadoop.conf.Configured
 import org.apache.hadoop.conf.Configuration
 
 import org.apache.hadoop.io._
-import org.apache.hadoop.mapreduce.Mapper
+import org.apache.hadoop.mapreduce._
 import org.apache.hadoop.mapreduce.Job
+import org.apache.hadoop.mapreduce.lib._
 import org.apache.hadoop.mapreduce.lib.input.FileInputFormat
 import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat
 import org.apache.hadoop.mapreduce.lib.input.TextInputFormat
@@ -29,7 +30,7 @@ object Main {
   }
 }
 
-object Ssimilarity extends HadoopInterop {
+object SSimilarity extends HadoopInterop {
 
   val LOG = Logger.getRootLogger()
 
@@ -38,14 +39,15 @@ object Ssimilarity extends HadoopInterop {
     extends SMapper[LongWritable, Text, Text, Text] {
       override def map(key: LongWritable, line: Text, context: Context) {
         val arr = line.toString.split(",")
-        context.write(arr.mkString(","))
+        context.write(arr.mkString(","), "1")
+      }
+    }
 
-        // if (arr.size < 3) {
-        //   arr.foreach(node =>
-        //     context.write(new Text(node), new Text(arr.mkString(","))))
-        // } else {
-        //   context.write(new Text(arr(1)), new Text(arr(0)+"\t"+FromZoneFile))
-        // }
+    class ToItemVectorReducer extends SReducer[Text, Text, Text, Text] {
+      override def reduce(key: Text, values: Iterable[Text], context:Context) {
+        for (value <- values) {
+          context.write(key, value)
+        }
       }
     }
     
@@ -59,11 +61,12 @@ object Ssimilarity extends HadoopInterop {
       val job = new Job(conf, "create item vectors")
       job.setJarByClass(classOf[SSimilarity])
       job.setMapperClass(classOf[ToUserPrefsMapper])
-      job.setReducerClass(classOf[IdentityReducer])
+      job.setReducerClass(classOf[ToItemVectorReducer])
 
       job.setInputFormatClass(classOf[TextInputFormat])
       FileInputFormat.setInputPaths(job, conf.get("ssimilarity.input"))
-      job.setOutputFormatClass(classOf[SequenceFileOutputFormat[Text, Text]])
+      // job.setOutputFormatClass(classOf[SequenceFileOutputFormat[Text, Text]])
+      job.setOutputFormatClass(classOf[TextOutputFormat[Text, Text]])
 
       FileOutputFormat.setOutputPath(job, conf.get("ssimilarity.itemvectorspath"))
 
@@ -75,6 +78,7 @@ object Ssimilarity extends HadoopInterop {
       return job
     }
   }
+}
 
 
 
@@ -88,11 +92,11 @@ class SSimilarity extends Configured with Tool with HadoopInterop {
     if (!SSimilarity.FirstPhase.run(conf)) return 1
     SSimilarity.LOG.info("Finished FirstPhase.")
 
-    if (!SSimilarity.SecondPhase.run(conf)) return 1
-    SSimilarity.LOG.info("Finished SecondPhase.")
+    // if (!SSimilarity.SecondPhase.run(conf)) return 1
+    // SSimilarity.LOG.info("Finished SecondPhase.")
 
-    if (!SSimilarity.ThirdPhase.run(conf)) return 1 
-    SSimilarity.LOG.info("Finished ThirdPhase.")
+    // if (!SSimilarity.ThirdPhase.run(conf)) return 1 
+    // SSimilarity.LOG.info("Finished ThirdPhase.")
 
     // SSimilarity.LOG.info("Output directory: ")
     return 0
