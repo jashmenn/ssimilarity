@@ -3,6 +3,6 @@ task :default do
 end
 
 task :clean do
-  sh "rm -rf output/*"
+  sh "rm -rf output"
   sh "rm -rf tmp/*"
 end

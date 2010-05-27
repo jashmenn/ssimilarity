@@ -19,10 +19,25 @@ The rating for the user must be between 1 (dislike) - 5 (like). Leave out a row 
 
 File format:
 
+    # (userId, itemId, prefVal)
     Nate,iPhone,5
     Nate,VW,5
     Jay,iPad,4
     Jay,iPhone,3
+
+Phase 1: Create the item-vectors
+  
+    # (itemId, userId, prefVal)
+    VW      Nate,5
+    iPad    Jay,4
+    iPhone  Nate,5|Jay,3
+
+Phase 2: Compute the length of the item vectors, store it with the item, create the user-vectors 
+
+    # (userId, (itemId, ivLength, prefVal) ...)
+    Jay     iPad,4.0,4.0|iPhone,5.830951894845301,3.0
+    Nate    VW,5.0,5.0|iPhone,5.830951894845301,5.0
+
 
 ### Output
 
