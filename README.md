@@ -9,8 +9,8 @@ recommendation system.
 Benefits:
 
 * It's fully distributed
-* It handles string Ids (unlike Mahout)
-* It's short: only about 300 lines of scala code. 
+* It handles string ids (unlike Mahout)
+* It's short: only about 300 lines of Scala code.
 
 ### Prereq
 
