@@ -7,6 +7,8 @@ import org.apache.hadoop.mapreduce.Reducer
 
 import org.apache.hadoop.fs.Path
 
+import org.apache.hadoop.fs.Path
+import org.apache.hadoop.io.{BooleanWritable, IntWritable, LongWritable, FloatWritable, Text, UTF8}
 import java.lang.{Iterable => JavaItb}
 import java.util.{Iterator => JavaItr}
 import java.io.File
@@ -15,6 +17,28 @@ trait HadoopInterop {
   implicit def conf2ComponentConf(conf: Configuration) = new {
     // extend JobConf here, if you'd like
   }
+
+  implicit def writable2boolean(value: BooleanWritable) = value.get
+  implicit def boolean2writable(value: Boolean) = new BooleanWritable(value)
+
+  implicit def writable2int(value: IntWritable) = value.get
+  implicit def int2writable(value: Int) = new IntWritable(value)
+
+  implicit def writable2long(value: LongWritable) = value.get
+  implicit def long2writable(value: Long) = new LongWritable(value)
+
+  implicit def writable2float(value: FloatWritable) = value.get
+  implicit def float2writable(value: Float) = new FloatWritable(value)
+
+  implicit def text2string(value: Text) = value.toString
+  implicit def string2text(value: String) = new Text(value)
+
+  implicit def uft82string(value: UTF8) = value.toString
+  implicit def string2utf8(value: String) = new UTF8(value)
+
+  implicit def path2string(value: Path) = value.toString
+  implicit def string2path(value: String) = new Path(value)
+
 
   class UnjackedIterable[T](private val jtb: JavaItb[T]) extends Iterable[T] {
     def elements: Iterator[T] = jtb.iterator

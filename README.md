@@ -32,8 +32,9 @@ Item-to-item similarity
 
 ### Credit
 
-* Originally based on outline of ItemSimilarityJob in the Apache Mahout project. 
+* Outline originally based on ItemSimilarityJob in the Apache Mahout project. 
 * Algorithm used is a slight modification from the algorithm described in 
   http://www.umiacs.umd.edu/~jimmylin/publications/Elsayed_etal_ACL2008_short.pdf
 * HadoopInterop.scala forked from jmhodges "componentize" 
+* and a bit from: http://blog.jonhnnyweslley.net/2008/05/shadoop.html
 

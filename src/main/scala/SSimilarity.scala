@@ -29,6 +29,55 @@ object Main {
   }
 }
 
+object Ssimilarity extends HadoopInterop {
+
+  val LOG = Logger.getRootLogger()
+
+  object FirstPhase {
+    class ToUserPrefsMapper
+    extends SMapper[LongWritable, Text, Text, Text] {
+      override def map(key: LongWritable, line: Text, context: Context) {
+        val arr = line.toString.split(",")
+        context.write(arr.mkString(","))
+
+        // if (arr.size < 3) {
+        //   arr.foreach(node =>
+        //     context.write(new Text(node), new Text(arr.mkString(","))))
+        // } else {
+        //   context.write(new Text(arr(1)), new Text(arr(0)+"\t"+FromZoneFile))
+        // }
+      }
+    }
+    
+    def run(conf: Configuration) : Boolean = {
+      LOG.info("Running FirstPhase.")
+      val job = joinJob(conf)
+      job.waitForCompletion(true)
+    }
+
+    def joinJob(conf: Configuration) : Job = {
+      val job = new Job(conf, "create item vectors")
+      job.setJarByClass(classOf[SSimilarity])
+      job.setMapperClass(classOf[ToUserPrefsMapper])
+      job.setReducerClass(classOf[IdentityReducer])
+
+      job.setInputFormatClass(classOf[TextInputFormat])
+      FileInputFormat.setInputPaths(job, conf.get("ssimilarity.input"))
+      job.setOutputFormatClass(classOf[SequenceFileOutputFormat[Text, Text]])
+
+      FileOutputFormat.setOutputPath(job, conf.get("ssimilarity.itemvectorspath"))
+
+      job.setMapOutputKeyClass(classOf[Text])
+      job.setMapOutputValueClass(classOf[Text])
+      job.setOutputKeyClass(classOf[Text])
+      job.setOutputValueClass(classOf[Text])
+
+      return job
+    }
+  }
+
+
+
 class SSimilarity extends Configured with Tool with HadoopInterop {
   def run(args: Array[String]): Int = {
     val conf = getRealConf(args)
@@ -58,10 +107,18 @@ class SSimilarity extends Configured with Tool with HadoopInterop {
       System.exit(1)
     }
 
-    conf.set("SSimilarity.input",
+    conf.set("ssimilarity.input",
                    cl.getOptionValue("input", "inputfiles"))
-    conf.set("SSimilarity.outputdir",
+    conf.set("ssimilarity.tmpdir",
+                   cl.getOptionValue("tmpdir", "tmp"))
+    conf.set("ssimilarity.outputdir",
                    cl.getOptionValue("outputdir", "output"))
+
+    // setup our tmp paths
+    conf.set("ssimilarity.itemvectorspath",
+                   cl.getOptionValue("itemvectorspath", conf.get("ssimilarity.tmpdir") + "/itemVectors"))
+    conf.set("ssimilarity.uservectorspath",
+                   cl.getOptionValue("uservectorspath", conf.get("ssimilarity.tmpdir") + "/userVectors"))
 
     conf
   }
