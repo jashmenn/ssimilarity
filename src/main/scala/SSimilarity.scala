@@ -31,7 +31,6 @@ object Main {
   }
 }
 
-
 object SSimilarity extends HadoopInterop {
 
   val LOG = Logger.getRootLogger()
@@ -150,16 +149,17 @@ object SSimilarity extends HadoopInterop {
   }
 
   object ThirdPhase {
-    implicit def string2parsedTuple(string: String) = new {
-      def parsedItemPref() : Tuple3[String, Double, Double] = {
-          var cols = string.split(",") 
-          return (cols(0), java.lang.Double.parseDouble(cols(1)), java.lang.Double.parseDouble(cols(2)))
-      }
-    }
-
     // map out each pair of items that appears in the same user-vector together with the multiplied vector lengths
     // of the associated item vectors
-    class CopreferredItemsMapper extends SMapper[Text, Text, Text, Text] {
+    class CopreferredItemsMapper extends SMapper[Text, Text, Text, DoubleWritable] {
+
+      implicit def string2parsedTuple(string: String) = new {
+        def parsedItemPref() : Tuple3[String, Double, Double] = {
+            var cols = string.split(",") 
+            return (cols(0), java.lang.Double.parseDouble(cols(1)), java.lang.Double.parseDouble(cols(2)))
+        }
+      }
+
       override def map(userId: Text, itemPrefLines: Text, context: Context) {
         var itemPrefs = itemPrefLines.split("\\|")
         
@@ -176,7 +176,7 @@ object SSimilarity extends HadoopInterop {
 
             val pair = List(itemAId, itemBId, itemNLength * itemMLength).mkString(",")
 
-            context.write(pair, (itemNPrefVal * itemMPrefVal).toString)
+            context.write(pair, itemNPrefVal * itemMPrefVal)
             m += 1
           }
 
@@ -184,13 +184,21 @@ object SSimilarity extends HadoopInterop {
       }
     }
 
-    class CosineSimilarityReducer extends SReducer[Text, Text, Text, Text] {
-      override def reduce(userId: Text, values: Iterable[Text], context:Context) {
-        // var prefs = values.foldLeft(new ListBuffer[String]()) { (acc, value) => acc += value; acc }
-        // context.write(userId, prefs.mkString("|"))
-        for (value <- values) {
-          context.write(userId, value)
+    class CosineSimilarityReducer extends SReducer[Text, DoubleWritable, Text, DoubleWritable] {
+
+      implicit def string2parsedTuple(text: Text) = new {
+        def parsedItemPairLength() : Tuple3[String, String, Double] = {
+            var cols = text.toString.split(",") 
+            return (cols(0), cols(1), java.lang.Double.parseDouble(cols(2)))
         }
+      }
+      override def reduce(pair: Text, values: Iterable[DoubleWritable], context:Context) {
+        var numerator = 0.0D
+        for (value <- values) { numerator += value }
+        var (idA, idB, length) = pair.parsedItemPairLength
+        var denominator = length 
+        var cosine = numerator / denominator 
+        context.write(List(idA,idB).mkString(","), cosine)
       }
     }
     
@@ -206,16 +214,15 @@ object SSimilarity extends HadoopInterop {
       job.setMapperClass(classOf[CopreferredItemsMapper ])
       job.setReducerClass(classOf[CosineSimilarityReducer])
 
-      // job.setInputFormatClass(classOf[TextInputFormat])
       job.setInputFormatClass(classOf[SequenceFileInputFormat[Text, Text]])
       FileInputFormat.setInputPaths(job, conf.get("ssimilarity.uservectorspath"))
-      job.setOutputFormatClass(classOf[TextOutputFormat[Text, Text]])
+      job.setOutputFormatClass(classOf[TextOutputFormat[Text, DoubleWritable]])
       FileOutputFormat.setOutputPath(job, conf.get("ssimilarity.outputdir"))
 
       job.setMapOutputKeyClass(classOf[Text])
-      job.setMapOutputValueClass(classOf[Text])
+      job.setMapOutputValueClass(classOf[DoubleWritable])
       job.setOutputKeyClass(classOf[Text])
-      job.setOutputValueClass(classOf[Text])
+      job.setOutputValueClass(classOf[DoubleWritable])
 
       return job
     }

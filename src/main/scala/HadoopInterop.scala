@@ -8,7 +8,7 @@ import org.apache.hadoop.mapreduce.Reducer
 import org.apache.hadoop.fs.Path
 
 import org.apache.hadoop.fs.Path
-import org.apache.hadoop.io.{BooleanWritable, IntWritable, LongWritable, FloatWritable, Text, UTF8}
+import org.apache.hadoop.io.{BooleanWritable, IntWritable, LongWritable, FloatWritable, DoubleWritable, Text, UTF8}
 import java.lang.{Iterable => JavaItb}
 import java.util.{Iterator => JavaItr}
 import java.io.File
@@ -29,6 +29,9 @@ trait HadoopInterop {
 
   implicit def writable2float(value: FloatWritable) = value.get
   implicit def float2writable(value: Float) = new FloatWritable(value)
+
+  implicit def writable2double(value: DoubleWritable) = value.get
+  implicit def double2writable(value: Double) = new DoubleWritable(value)
 
   implicit def text2string(value: Text) = value.toString
   implicit def string2text(value: String) = new Text(value)
