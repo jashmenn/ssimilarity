@@ -203,7 +203,6 @@ object SSimilarity extends HadoopInterop {
           numerator += value 
           actualCoratedCount += 1
         }
-        println("min: %d act: %d", minimumCoratedCount, actualCoratedCount)
 
         if(actualCoratedCount >= minimumCoratedCount) { 
           var (idA, idB, length) = pair.parsedItemPairLength
@@ -245,8 +244,6 @@ object SSimilarity extends HadoopInterop {
   def truncate(d : Double, places : int) : Double = {
     return new java.math.BigDecimal(d, new java.math.MathContext(places)).doubleValue
   }
-  
-
 
 }
 

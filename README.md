@@ -1,11 +1,26 @@
-## communitize
+## SSimilarity
 
-### What this does
+### What this is 
 
-Runs a distributed computation of the cosine distance of the item-vecotrs of a user-item matrix
+Runs a distributed computation of the cosine distance of the item-vectors of a
+user-item matrix.  This value can be used as the basis for an item-based
+recommendation system.
+
+Benefits:
+
+* It's fully distributed
+* It handles string Ids (unlike Mahout)
+* It's short: only about 300 lines of scala code. 
+
+### Prereq
+
+* Hadoop 0.20.x
+* Apache Buildr
 
 ### How
 
+    bu clean package
+    rake clean default
 
 ### Input
 
@@ -46,15 +61,6 @@ Phase 3: Compute the pairwise cosine similarity for all item pairs that have bee
 
     where [1] is the sum of the product of the co-rated pref values (dot product) and 
           [2] is the product of the vector lengths 
-
-    
-
-
-### Output
-
-Item-to-item similarity
-
-    xxx
 
 ### Credit
 
